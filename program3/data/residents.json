@@ -1,0 +1,65 @@
+[
+  {
+    "id": 1,
+    "name": "Aarav Sharma",
+    "roll": 1,
+    "room": "A-101",
+    "status": "active"
+  },
+  {
+    "id": 2,
+    "name": "Diya Patel",
+    "roll": 2,
+    "room": "B-204",
+    "status": "active"
+  },
+  {
+    "id": 3,
+    "name": "Kabir Singh",
+    "roll": 3,
+    "room": "C-305",
+    "status": "inactive"
+  },
+  {
+    "id": 4,
+    "name": "Ananya Rao",
+    "roll": 4,
+    "room": "A-102",
+    "status": "active"
+  },
+  {
+    "id": 5,
+    "name": "Rohan Mehta",
+    "roll": 5,
+    "room": "B-205",
+    "status": "active"
+  },
+  {
+    "id": 6,
+    "name": "Sneha Iyer",
+    "roll": 6,
+    "room": "C-306",
+    "status": "inactive"
+  },
+  {
+    "id": 7,
+    "name": "Vikram Joshi",
+    "roll": 7,
+    "room": "A-103",
+    "status": "active"
+  },
+  {
+    "id": 8,
+    "name": "Priya Nair",
+    "roll": 8,
+    "room": "B-206",
+    "status": "active"
+  },
+  {
+    "id": 1794772441471,
+    "name": "Kushal Mangesh Naik",
+    "roll": 43,
+    "room": "A-105",
+    "status": "inactive"
+  }
+]

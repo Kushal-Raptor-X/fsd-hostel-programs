@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hostel Utility (Node.js)</title>
+<style>
+  :root { --bg:#0a1f1a; --card:#132a24; --accent:#34d399; --text:#e2e8f0; --muted:#94a3b8; --danger:#f87171; --ok:#a7f3d0; }
+  * { box-sizing:border-box; font-family: system-ui, sans-serif; }
+  body { margin:0; background:var(--bg); color:var(--text); min-height:100vh; }
+  nav.topbar { background:var(--card); padding:14px 24px; display:flex; gap:18px; border-bottom:1px solid #1f3b33; }
+  nav.topbar a { color:var(--text); font-weight:600; cursor:pointer; }
+  nav.topbar a:hover { color:var(--accent); }
+  nav.topbar a.active { color:var(--accent); }
+  .container { max-width:960px; margin:24px auto; padding:0 16px; }
+  .card { background:var(--card); border-radius:12px; padding:20px; margin-bottom:16px; box-shadow:0 4px 12px rgba(0,0,0,.3); }
+  h1,h2 { color:var(--accent); }
+  .row { display:flex; gap:12px; flex-wrap:wrap; }
+  label { display:flex; flex-direction:column; font-size:13px; color:var(--muted); flex:1; min-width:160px; }
+  input, select { padding:8px 10px; border-radius:6px; border:1px solid #1f3b33; background:#061510; color:var(--text); margin-top:4px; }
+  button { padding:8px 14px; border:none; border-radius:6px; background:var(--accent); color:#061510; font-weight:600; cursor:pointer; }
+  button.secondary { background:#1f3b33; color:var(--text); }
+  button.danger { background:var(--danger); color:#fff; }
+  .msg { margin-top:8px; font-size:14px; }
+  .msg.err { color:var(--danger); }
+  .msg.ok { color:var(--ok); }
+  table { width:100%; border-collapse:collapse; }
+  th, td { padding:8px 10px; border-bottom:1px solid #1f3b33; text-align:left; }
+  th { color:var(--accent); }
+  .badge { padding:2px 8px; border-radius:999px; font-size:12px; }
+  .badge.active { background:#064e3b; color:var(--ok); }
+  .badge.inactive { background:#7f1d1d; color:var(--danger); }
+  .toolbar { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+  .view { display:none; }
+  .view.active { display:block; }
+  .stat { font-size:28px; font-weight:700; color:var(--accent); }
+</style>
+</head>
+<body>
+  <nav class="topbar">
+    <a data-view="home" class="active">Home</a>
+    <a data-view="add">Add</a>
+    <a data-view="list">List</a>
+  </nav>
+
+  <div class="container">
+    <div id="home" class="view active">
+      <div class="card">
+        <h1>Hostel Management (Node.js HTTP + FS/Path + Streams + EventEmitter)</h1>
+        <p>Backend: pure Node.js, no Express. Records persisted in <code>data/residents.json</code>.</p>
+        <div class="row">
+          <div class="card" style="flex:1;min-width:160px;text-align:center"><div class="stat" id="statTotal">0</div><div>Total Residents</div></div>
+          <div class="card" style="flex:1;min-width:160px;text-align:center"><div class="stat" id="statActive">0</div><div>Active</div></div>
+          <div class="card" style="flex:1;min-width:160px;text-align:center"><div class="stat" id="statInactive">0</div><div>Inactive</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="add" class="view">
+      <div class="card">
+        <h2>Add Resident</h2>
+        <div class="row">
+          <label>Name <input id="name" placeholder="Full name" /></label>
+          <label>Roll No <input id="roll" type="number" placeholder="e.g. 43" /></label>
+          <label>Room <input id="room" placeholder="e.g. A-101" /></label>
+          <label>Status
+            <select id="status"><option value="active">Active</option><option value="inactive">Inactive</option></select>
+          </label>
+        </div>
+        <div style="margin-top:12px">
+          <button id="addBtn">POST (Add)</button>
+        </div>
+        <div id="formMsg" class="msg"></div>
+      </div>
+    </div>
+
+    <div id="list" class="view">
+      <div class="card">
+        <div class="toolbar">
+          <button id="loadBtn">GET (Load)</button>
+          <input id="search" placeholder="Search..." style="flex:0;min-width:200px" />
+        </div>
+        <div id="loadMsg" class="msg"></div>
+        <table>
+          <thead><tr><th>Name</th><th>Roll No</th><th>Room</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<script>
+const base = "";
+let residents = [];
+function showMsg(el,text,ok=true){ el.textContent=text; el.className="msg "+(ok?"ok":"err"); }
+function switchView(v){
+  document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
+  document.getElementById(v).classList.add("active");
+  document.querySelectorAll("nav.topbar a").forEach(a=>a.classList.toggle("active", a.dataset.view===v));
+  if(v==="list") load();
+  if(v==="home") updateStats();
+}
+document.querySelectorAll("nav.topbar a").forEach(a=>a.addEventListener("click",()=>switchView(a.dataset.view)));
+
+async function load(){
+  try {
+    const res = await fetch(base+"/api/residents");
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    residents = await res.json();
+    render();
+    showMsg(document.getElementById("loadMsg"), `Loaded ${residents.length} records.`, true);
+    updateStats();
+  } catch(e){ showMsg(document.getElementById("loadMsg"), "Failed: "+e.message, false); }
+}
+function render(){
+  const q = document.getElementById("search").value.toLowerCase();
+  let list = [...residents];
+  if(q) list = list.filter(r=>r.name.toLowerCase().includes(q)||r.room.toLowerCase().includes(q));
+  const tbody = document.getElementById("tbody");
+  tbody.innerHTML = "";
+  list.forEach(r=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${r.name}</td><td>${r.roll}</td><td>${r.room}</td><td><span class="badge ${r.status}">${r.status}</span></td>
+      <td><button class="secondary" data-act="toggle" data-id="${r.id}">Toggle</button> <button class="danger" data-act="del" data-id="${r.id}">Delete</button></td>`;
+    tbody.appendChild(tr);
+  });
+}
+function updateStats(){
+  fetch(base+"/api/residents").then(r=>r.json()).then(data=>{
+    document.getElementById("statTotal").textContent = data.length;
+    document.getElementById("statActive").textContent = data.filter(x=>x.status==="active").length;
+    document.getElementById("statInactive").textContent = data.filter(x=>x.status==="inactive").length;
+  }).catch(()=>{});
+}
+document.getElementById("addBtn").addEventListener("click", async ()=>{
+  const name = document.getElementById("name").value.trim();
+  const roll = document.getElementById("roll").value.trim();
+  const room = document.getElementById("room").value.trim();
+  const status = document.getElementById("status").value;
+  const fm = document.getElementById("formMsg");
+  if(!name||!roll||!room){ showMsg(fm,"All fields required.",false); return; }
+  try {
+    const res = await fetch(base+"/api/residents", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({name,roll,room,status}) });
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    showMsg(fm,"Added.",true);
+    document.getElementById("name").value=""; document.getElementById("roll").value=""; document.getElementById("room").value="";
+    await load();
+  } catch(e){ showMsg(fm,"Failed: "+e.message,false); }
+});
+document.getElementById("tbody").addEventListener("click", async e=>{
+  const btn = e.target.closest("button"); if(!btn) return;
+  const id = Number(btn.dataset.id);
+  if(btn.dataset.act==="del"){
+    await fetch(base+"/api/residents/"+id, {method:"DELETE"});
+    await load();
+  } else if(btn.dataset.act==="toggle"){
+    const r = residents.find(x=>x.id===id);
+    if(r){ await fetch(base+"/api/residents/"+id, {method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify({status: r.status==="active"?"inactive":"active"})}); await load(); }
+  }
+});
+document.getElementById("loadBtn").addEventListener("click", load);
+document.getElementById("search").addEventListener("input", render);
+load();
+updateStats();
+</script>
+</body>
+</html>

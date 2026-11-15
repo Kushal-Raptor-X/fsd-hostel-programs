@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hostel Management (Browser)</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --accent:#38bdf8; --text:#e2e8f0; --muted:#94a3b8; --danger:#f87171; --ok:#4ade80; }
+  * { box-sizing:border-box; font-family: system-ui, sans-serif; }
+  body { margin:0; background:var(--bg); color:var(--text); padding:24px; }
+  h1 { color:var(--accent); }
+  .card { background:var(--card); border-radius:12px; padding:20px; margin-bottom:16px; box-shadow:0 4px 12px rgba(0,0,0,.3); }
+  .row { display:flex; gap:12px; flex-wrap:wrap; }
+  label { display:flex; flex-direction:column; font-size:13px; color:var(--muted); flex:1; min-width:160px; }
+  input, select { padding:8px 10px; border-radius:6px; border:1px solid #334155; background:#0f172a; color:var(--text); margin-top:4px; }
+  button { padding:8px 14px; border:none; border-radius:6px; background:var(--accent); color:#0f172a; font-weight:600; cursor:pointer; }
+  button.secondary { background:#334155; color:var(--text); }
+  button.danger { background:var(--danger); color:#fff; }
+  .msg { margin-top:8px; font-size:14px; }
+  .msg.err { color:var(--danger); }
+  .msg.ok { color:var(--ok); }
+  table { width:100%; border-collapse:collapse; }
+  th, td { padding:8px 10px; border-bottom:1px solid #334155; text-align:left; }
+  th { color:var(--accent); }
+  .badge { padding:2px 8px; border-radius:999px; font-size:12px; }
+  .badge.active { background:#14532d; color:var(--ok); }
+  .badge.inactive { background:#7f1d1d; color:var(--danger); }
+  .toolbar { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+  .spinner { display:inline-block; width:16px; height:16px; border:2px solid #334155; border-top-color:var(--accent); border-radius:50%; animation:spin 1s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg);} }
+</style>
+</head>
+<body>
+  <h1>Hostel Management (Browser-based)</h1>
+
+  <div class="card">
+    <h3>Add / Update Resident</h3>
+    <div class="row">
+      <label>Name <input id="name" placeholder="Full name" /></label>
+      <label>Roll No <input id="roll" type="number" placeholder="e.g. 43" /></label>
+      <label>Room <input id="room" placeholder="e.g. A-101" /></label>
+      <label>Status
+        <select id="status">
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </label>
+    </div>
+    <div class="toolbar" style="margin-top:12px">
+      <button id="addBtn">POST (Add)</button>
+      <button id="updateBtn" class="secondary">PUT (Update)</button>
+      <button id="resetBtn" class="secondary">Reset</button>
+    </div>
+    <div id="formMsg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <div class="toolbar">
+      <button id="loadBtn">GET (Load sample data)</button>
+      <label style="flex:0;min-width:120px">Sort by
+        <select id="sort">
+          <option value="name">Name</option>
+          <option value="roll">Roll No</option>
+          <option value="room">Room</option>
+        </select>
+      </label>
+      <input id="search" placeholder="Search name/room..." style="flex:0;min-width:200px" />
+      <span id="spinner" style="display:none" class="spinner"></span>
+    </div>
+    <div id="loadMsg" class="msg"></div>
+    <table>
+      <thead><tr><th>Name</th><th>Roll No</th><th>Room</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+<script>
+const API = "https://jsonplaceholder.typicode.com/users";
+let residents = [];
+let editingId = null;
+
+const $ = id => document.getElementById(id);
+function showMsg(el, text, ok=true){ el.textContent = text; el.className = "msg " + (ok?"ok":"err"); }
+
+function validate(){
+  const name = $("name").value.trim();
+  const roll = $("roll").value.trim();
+  const room = $("room").value.trim();
+  if(!name){ showMsg($("formMsg"),"Name is required.",false); return null; }
+  if(!roll || isNaN(roll) || Number(roll)<=0){ showMsg($("formMsg"),"Valid roll number required.",false); return null; }
+  if(!room){ showMsg($("formMsg"),"Room is required.",false); return null; }
+  return { name, roll:Number(roll), room, status:$("status").value };
+}
+
+async function loadSample(){
+  const sp = $("spinner"); sp.style.display="inline-block";
+  $("loadMsg").textContent = "";
+  try {
+    const res = await fetch(API, { method:"GET" });
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const data = await res.json();
+    // map sample users -> hostel residents
+    residents = data.slice(0,8).map((u,i)=>({
+      id: u.id,
+      name: u.name,
+      roll: 100 + i,
+      room: "R-"+(101+i),
+      status: i%3===0 ? "inactive" : "active"
+    }));
+    render();
+    showMsg($("loadMsg"), `Loaded ${residents.length} records via GET.`, true);
+  } catch(e){
+    showMsg($("loadMsg"), "Failed to load: "+e.message, false);
+  } finally { sp.style.display="none"; }
+}
+
+function render(){
+  const sortKey = $("sort").value;
+  const q = $("search").value.toLowerCase();
+  let list = [...residents];
+  list.sort((a,b)=>{
+    if(sortKey==="roll") return a.roll-b.roll;
+    return String(a[sortKey]).localeCompare(String(b[sortKey]));
+  });
+  if(q) list = list.filter(r => r.name.toLowerCase().includes(q) || r.room.toLowerCase().includes(q));
+  const tbody = $("tbody");
+  tbody.innerHTML = "";
+  list.forEach(r=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${r.name}</td>
+      <td>${r.roll}</td>
+      <td>${r.room}</td>
+      <td><span class="badge ${r.status}">${r.status}</span></td>
+      <td>
+        <button class="secondary" data-act="edit" data-id="${r.id}">Edit</button>
+        <button class="danger" data-act="del" data-id="${r.id}">DELETE</button>
+        <button class="secondary" data-act="toggle" data-id="${r.id}">Toggle</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// POST (add)
+$("addBtn").addEventListener("click", async ()=>{
+  const data = validate(); if(!data) return;
+  // simulate POST
+  try {
+    const res = await fetch(API, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(data) });
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const created = await res.json();
+    const newRec = { id: created.id || (Date.now()), ...data };
+    residents.push(newRec);
+    render();
+    showMsg($("formMsg"), "POST: resident added.", true);
+    resetForm();
+  } catch(e){ showMsg($("formMsg"), "POST failed: "+e.message, false); }
+});
+
+// PUT (update)
+$("updateBtn").addEventListener("click", async ()=>{
+  if(editingId===null){ showMsg($("formMsg"),"Select a record via Edit first.",false); return; }
+  const data = validate(); if(!data) return;
+  try {
+    const res = await fetch(API+"/"+editingId, { method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(data) });
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const idx = residents.findIndex(r=>r.id===editingId);
+    if(idx>-1) residents[idx] = { id:editingId, ...data };
+    editingId = null;
+    render();
+    showMsg($("formMsg"), "PUT: resident updated.", true);
+    resetForm();
+  } catch(e){ showMsg($("formMsg"), "PUT failed: "+e.message, false); }
+});
+
+$("tbody").addEventListener("click", e=>{
+  const btn = e.target.closest("button"); if(!btn) return;
+  const id = Number(btn.dataset.id);
+  const act = btn.dataset.act;
+  if(act==="del"){
+    residents = residents.filter(r=>r.id!==id);
+    render();
+    showMsg($("loadMsg"), "DELETE: record removed.", true);
+  } else if(act==="edit"){
+    const r = residents.find(x=>x.id===id);
+    if(!r) return;
+    $("name").value=r.name; $("roll").value=r.roll; $("room").value=r.room; $("status").value=r.status;
+    editingId = id;
+    showMsg($("formMsg"), "Editing record #"+id+" (use PUT to save).", true);
+  } else if(act==="toggle"){
+    const r = residents.find(x=>x.id===id);
+    if(r){ r.status = r.status==="active"?"inactive":"active"; render(); }
+  }
+});
+
+function resetForm(){ $("name").value=""; $("roll").value=""; $("room").value=""; $("status").value="active"; editingId=null; }
+$("resetBtn").addEventListener("click", resetForm);
+$("sort").addEventListener("change", render);
+$("search").addEventListener("input", render);
+$("loadBtn").addEventListener("click", loadSample);
+</script>
+</body>
+</html>
