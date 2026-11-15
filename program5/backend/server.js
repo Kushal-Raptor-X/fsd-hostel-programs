@@ -87,5 +87,5 @@ app.use((err, req, res, next) => {
 });
 
 seed().then(() => {
-  app.listen(PORT, () => console.log(`Backend running at http://localhost:${PORT}`));
+  app.listen(PORT, "0.0.0.0", () => console.log(`Backend listening on port ${PORT}`));
 });
