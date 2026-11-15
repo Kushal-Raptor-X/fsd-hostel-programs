@@ -2,6 +2,7 @@ services:
   - type: web
     name: hostel-backend
     env: node
+    plan: free
     buildCommand: npm install
     startCommand: node server.js
     envVars:
@@ -13,5 +14,6 @@ services:
           property: connectionString
 databases:
   - name: hostel-db
+    plan: free
     databaseName: hostel
     user: hostel
